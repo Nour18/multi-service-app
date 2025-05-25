@@ -1,93 +1,331 @@
-# multi-service-app
+# 🛠 Multi-Service Application Deployment Pipeline
+
+## 🚀 Project Overview
+
+This project demonstrates a complete DevOps CI/CD pipeline for a Python-based multi-service application, including:
+
+- Two Flask-based microservices
+- Containerization with Docker
+- Infrastructure provisioning using Terraform
+- CI/CD using GitLab CI
+- Deployment to AWS EC2
+
+---
 
 
+## 📁 Project Structure
+```
+multi-service-app/
+│
+├── serviceA/
+│   ├── app.py                   # Flask app for Service A
+│   ├── Dockerfile               # Dockerfile for Service A
+│   ├── requirements.txt         # Python dependencies for Service A
+│   └── test_app.py              # Unit tests for Service A
+│
+├── serviceB/
+│   ├── processor.py             # Flask app for Service B
+│   ├── Dockerfile               # Dockerfile for Service B
+│   ├── requirements.txt         # Python dependencies for Service B
+│   └── test_processor.py        # Unit tests for Service B
+│
+├── terraform/
+│   ├── main.tf                  # Terraform config to provision AWS EC2 instances
+│   ├── variables.tf             # Terraform variables definition
+│   └── outputs.tf               # Terraform outputs for IP addresses, etc.
+│
+├── .gitlab-ci.yml               # GitLab CI/CD pipeline configuration
+├── docker-compose.yml           # Compose file for local dev/testing
+└── README.md                   # This documentation file
+```
+---
 
-## Getting started
+## ⚙️ Technologies & Tools Used
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+- **Python 3.11**, Flask, requests
+- **Docker** & **Docker Compose**
+- **Terraform** (for EC2 infrastructure)
+- **GitLab CI/CD**
+- **AWS EC2** for deployment
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+---
+## 📦 Services
 
-## Add your files
+### 🧩 Service A: `User Service`
+- Stores and retrieves user data.
+- Routes:
+  - `POST /user` — Create a user.
+  - `GET /user/<id>` — Retrieve user info.
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+### 🔧 Service B: `Processor Service`
+- Processes data fetched from Service A.
+- Route:
+  - `GET /process/<user_id>` — Returns uppercased name for the user from Service A.
+
+---
+## 🐳 Containerization
+
+Each service has its own Dockerfile which:
+
+- Installs dependencies (Flask, requests, etc.).
+- Copies source code into the container.
+- Sets environment variables for dynamic configs (e.g., `SERVICE_A_URL`).
+- Defines the default command to run the Flask app.
+---
+## 🏗️ Docker-compose Architecture Overview
+```
+                        +--------------------------------------+
+                        |       Docker Host / EC2 Instance     |
+                        |                                      |
+                        |     Docker Network (shared bridge)   |
+                        |        +------------------------+    |
+                        |        | Container: Service A   |    |
+                        |        | Flask API              |    |
+                        |        | Exposed: 5000          |    |
+                        |        +------------------------+    |
+                        |                 ↑                    |
+                        |        http://service-a:5000/user    |
+                        |          Internal HTTP Request       |
+                        |                 ↓                    |
+                        |        +------------------------+    |
+                        |        | Container: Service B   |    |
+                        |        | Flask Processor        |    |
+                        |        | Exposed: 5001          |    |
+                        |        +------------------------+    |
+                        +--------------------------------------+
+
+                                 🔁 Internal API Call:
+                  Service B → Service A via `http://service-a:5000/user`
+
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.com/nourmadi17-group/multi-service-app.git
-git branch -M main
-git push -uf origin main
+
+## 🖥️ Local Development Setup
+
+### 1. Clone the Repository
+```bash
+git clone https://gitlab.com/nourmadi17-group/multi-service-app
+cd multi-service-app
 ```
 
-## Integrate with your tools
+### 2. Run Locally (with Docker-compose)
+```bash
+docker-compose up --build
+```
+### 3. Unit Tests
+```bash
+python -m unittest discover serviceA/
+python -m unittest discover serviceB/
+```
+---
+## 🌍 Infrastructure as Code with Terraform
 
-- [ ] [Set up project integrations](https://gitlab.com/nourmadi17-group/multi-service-app/-/settings/integrations)
+This Terraform script provisions the AWS infrastructure needed to run Service A and Service B:
 
-## Collaborate with your team
+- **Network Setup:** Creates a VPC, subnet, internet gateway, route table, and security group allowing SSH (port 22) and service ports (5000, 5001).
+- **Compute:** Launches two EC2 instances (for Service A and Service B) with Amazon Linux 2 AMI, public IPs, and attached security groups.
+- **IAM Roles:** Creates an IAM role and instance profile for EC2 instances to send logs/metrics to CloudWatch.
+- **SSH Access:** Configures an SSH key pair for secure access to EC2 instances.
+- **User Data:** Runs a `setup.sh` script on instance launch for initial setup (e.g., Docker installation).
+- **Outputs:** Provides public IP addresses of both EC2 instances.
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+### Prerequisites
 
-## Test and Deploy
+- Install and configure the [AWS CLI](https://aws.amazon.com/cli/).
+- Generate an SSH key pair and provide the public key path to Terraform.
+```bash
+  ssh-keygen -t rsa -b 4096 -f ~/.ssh/your_key_name
+```
+- Upload the public key path to the public_key_location Terraform variable.
+- The private key will be used by both CI/CD and you to SSH into EC2 instances.
 
-Use the built-in continuous integration in GitLab.
+## ⚙️ Usage
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+1. **Customize variables** in `terraform.tfvars`  
+   Update values like CIDR blocks, availability zone, instance type, and public key location.
 
-***
+2. **Initialize Terraform**  
+```bash
+   terraform init
+```
+3. **Preview infrastructure changes**
+```bash
+terraform plan
+```
+4. **Apply Terraform configuration**
+```bash
+terraform apply
+```
+---
 
-# Editing this README
+## 🧪 CI/CD Pipeline (GitLab)
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+### 🔄 Pipeline Stages
 
-## Suggestions for a good README
+- **Build** – Docker images for both services.
+- **Test** – Runs Python `unittest` for both services.
+- **Scan** – Static code analysis using Bandit.
+- **Deploy** – SSH into EC2 and runs latest containers.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
 
-## Name
-Choose a self-explaining name for your project.
+### 🔧 Stages Details
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
+**Build Stage**  
+- Build images from service directories.  
+- Authenticate and push to GitLab Registry.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+**Test Stage**  
+- Install Python dependencies.  
+- Run `unittest` for each service.
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+**Scan Stage**  
+- Install Bandit.  
+- Scan service code and produce security reports.  
+- Allows failures without blocking deployment.
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+**Deploy Stage**  
+- Install SSH client.  
+- Add EC2 hosts to known hosts.  
+- SSH to each EC2 instance: stop old container, pull new image, run container with proper ports and environment variables.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+### 🔁 Branching Strategy & Merge Request Workflow
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+📌 Branching Model: Git Feature Branch Workflow
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+We follow a branching model that promotes clean development practices and CI/CD efficiency.
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+| Branch Name      | Purpose                                                                 |
+|------------------|-------------------------------------------------------------------------|
+| `main`  | Stable production-ready code. Updated only via approved merge requests. |
+| `develop`        | Active development branch. All features and fixes are integrated here.  |
+| `feature/*`      | New features or enhancements. Merged into `develop`.                    |
+| `fix/*`       | Minor bug fixes. Merged into `develop`.                                |
+| `hotfix/*`       | Urgent fixes in production. Merged into both `main` and `develop`.     |
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+### Branch Types
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+- **Main Branches**  
+  - `main` (production-ready code)  
+  - `develop` (integration branch for features)
 
-## License
-For open source projects, say how it is licensed.
+- **Temporary Branches** (feature, fix, hotfix)  
+  - `feature/your-feature-name`  
+  - `fix/issue-description`  
+  - `hotfix/urgent-fix`
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## 🔀 Merge Request Workflow
+
+1. **Create a Branch**
+```bash
+git checkout -b feature/my-new-feature
+```
+2. **Commit Code**
+
+- Write clear, concise commit messages  
+- Follow naming conventions
+
+3. **Push Branch**
+
+```bash
+git push origin feature/my-new-feature
+```
+4. **Create a Merge Request (MR)**
+
+- Target `develop` branch  
+- Assign reviewers  
+- Ensure pipeline (build, test, scan) passes  
+
+5. **Code Review**
+
+- At least one approval required  
+- Fix comments before merge  
+
+6. **Merge & Cleanup**
+
+- Use **Merge**  
+- Delete the source branch  
+
+### ✅ Branch Protection (Recommended)
+
+- `main`: protected — no direct pushes  
+- `develop`: protected — only MRs allowed  
+- Require passing pipelines before merge  
+
+### 🔐 Environment Variables (GitLab CI/CD)
+
+| Variable Name           | Purpose                                           |
+|-------------------------|---------------------------------------------------|
+| `SSH_PRIVATE_KEY`       | For SSH login to EC2 (added in GitLab UI) |
+| `SERVICE_A_PUBLIC_IP`   | Public IP of EC2 running **Service A**            |
+| `SERVICE_B_PUBLIC_IP`   | Public IP of EC2 running **Service B**            |
+| `SERVICE_A_PRIVATE_IP`  | Internal/private IP used by **Service B** to reach **Service A** |
+| `CI_REGISTRY_*`         | GitLab container registry login credentials       |
+
+### 🚀 Deployment Process
+
+1. **Push changes to `develop`**  
+   → GitLab CI/CD pipeline runs:  
+   `build → test → scan`
+
+2. **Create a Merge Request**  
+   → From `develop` → `main`
+
+3. **Once merged into `main`**  
+   → GitLab automatically deploys to EC2:
+
+- **Service A** → EC2-A  
+- **Service B** → EC2-B
+---
+# ✅ Deployment Testing
+
+Once the CI/CD pipeline finishes deploying your services to AWS EC2, follow this guide to verify successful deployment and inter-service communication.
+
+---
+
+### 🔹 1. Check Running Containers on EC2
+
+SSH into each EC2 instance and confirm the containers are running:
+
+```bash
+# EC2 Instance A (Service A)
+ssh ec2-user@<SERVICE_A_PUBLIC_IP>
+docker ps
+
+# EC2 Instance B (Service B)
+ssh ec2-user@<SERVICE_B_PUBLIC_IP>
+docker ps
+```
+✅ **Expected Output (on each instance):**
+
+```bash
+CONTAINER ID   IMAGE                                  PORTS                  NAMES
+xxxxxxxxxxxx   registry.gitlab.com/.../service-a      0.0.0.0:5000->5000/tcp service-a
+xxxxxxxxxxxx   registry.gitlab.com/.../service-b      0.0.0.0:5001->5001/tcp service-b
+```
+🔹 2. Test Service A (User Creation & Retrieval)
+
+```bash
+# Create user
+curl -X POST http://<SERVICE_A_PUBLIC_IP>:5000/user \
+     -H "Content-Type: application/json" \
+     -d '{"id": 1, "name": "Alice"}'
+
+# Get user
+curl http://<SERVICE_A_PUBLIC_IP>:5000/user/1
+```
+✅ Expected Response:
+
+```json
+{"id": 1, "name": "Alice"}
+```
+🔹 3. Test Service B (Calling Service A)
+
+```bash
+curl http://<SERVICE_B_PUBLIC_IP>:5001/process/1
+```
+✅ Expected Response:
+
+```json
+{"name": "ALICE"}
+```
