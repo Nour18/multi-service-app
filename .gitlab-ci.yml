@@ -1,0 +1,127 @@
+image: docker:latest
+
+services:
+  - docker:dind
+  
+stages:
+  - build
+  - test
+  - scan
+  - deploy
+
+# Build both services
+build:
+  stage: build
+  script:
+    - echo "Building Docker images..."
+    - docker build -t $CI_REGISTRY_IMAGE/service-a:latest ./serviceA
+    - docker build -t $CI_REGISTRY_IMAGE/service-b:latest ./serviceB
+    - echo "Logging into GitLab Container Registry..."
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY 
+    - echo "Pushing images to registry..."
+    - docker push $CI_REGISTRY_IMAGE/service-a:latest 
+    - docker push $CI_REGISTRY_IMAGE/service-b:latest 
+  only:
+    - develop
+    - merge_requests
+# Run Python unit tests
+test:
+  stage: test
+  image: python:3.11
+  script:
+    - pip install -r serviceA/requirements.txt
+    - pip install -r serviceB/requirements.txt
+    - echo "Running unit tests for Service A..."
+    - python -m unittest discover serviceA/
+    - echo "Running unit tests for Service B..."
+    - python -m unittest discover serviceB/
+  only:
+    - develop
+    - merge_requests
+
+# Run basic security scans (Bandit)
+# Bandit scan for Service A
+security_scan_service_a:
+  stage: scan
+  image: python:3.11
+  before_script:
+    - pip install bandit
+  script:
+    - echo "Running Bandit security scan for Service A..."
+    - bandit -r serviceA -f json -o bandit-service-a.json || true
+  artifacts:
+    paths:
+      - bandit-service-a.json
+    expire_in: 1 week
+    reports:
+      sast: bandit-service-a.json
+  allow_failure: true
+
+# Bandit scan for Service B
+security_scan_service_b:
+  stage: scan
+  image: python:3.11
+  before_script:
+    - pip install bandit
+  script:
+    - echo "Running Bandit security scan for Service B..."
+    - bandit -r serviceB -f json -o bandit-service-b.json || true
+  artifacts:
+    paths:
+      - bandit-service-b.json
+    expire_in: 1 week
+    reports:
+      sast: bandit-service-b.json
+  allow_failure: true
+ # Allow pipeline to continue even if basic security issues are found
+  only:
+    - develop
+    - merge_requests
+
+# Deploy to EC2 (via SSH)
+deploy:
+  stage: deploy
+  image: ubuntu:latest
+  before_script:
+    - apt-get update && apt-get install -y openssh-client
+    - eval $(ssh-agent -s)
+    - chmod 600 "$SSH_PRIVATE_KEY"
+    - ssh-add "$SSH_PRIVATE_KEY"
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - ssh-keyscan -H "$SERVICE_A_PUBLIC_IP" >> ~/.ssh/known_hosts
+    - ssh-keyscan -H "$SERVICE_B_PUBLIC_IP" >> ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    # Deploy Service A
+    - echo "Deploying Service A to $SERVICE_A_PUBLIC_IP..."
+    - |
+      ssh ec2-user@$SERVICE_A_PUBLIC_IP << EOF
+      set -e
+      echo "Deploying Service A"
+      mkdir -p /home/ec2-user/multi-service-app/
+      cd /home/ec2-user/multi-service-app/
+      docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+      docker stop service-a || true
+      docker rm service-a || true
+      docker pull $CI_REGISTRY_IMAGE/service-a:latest
+      docker run -d --name service-a -p 5000:5000 $CI_REGISTRY_IMAGE/service-a:latest
+      EOF
+
+    # Deploy Service B
+    - echo "Deploying Service B to $SERVICE_B_PUBLIC_IP..."
+    - echo $SERVICE_A_PRIVATE_IP
+    - |
+      ssh ec2-user@$SERVICE_B_PUBLIC_IP << EOF
+      set -e
+      echo "Deploying Service B"
+      mkdir -p /home/ec2-user/multi-service-app/
+      cd /home/ec2-user/multi-service-app/
+      docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+      docker stop service-b || true
+      docker rm service-b || true
+      docker pull $CI_REGISTRY_IMAGE/service-b:latest
+      docker run -d --name service-b -p 5001:5001 -e SERVICE_A_URL=http://$SERVICE_A_PRIVATE_IP:5000/user $CI_REGISTRY_IMAGE/service-b:latest
+      EOF
+  only:
+    - main
