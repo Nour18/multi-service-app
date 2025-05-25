@@ -1,0 +1,22 @@
+version: '3'
+
+services:
+  service_a:
+    build:
+      context: ./service_a
+    ports:
+      - "5000:5000"
+    networks:
+      - app-network
+
+  processor:
+    build:
+      context: ./processor
+    ports:
+      - "5001:5001"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
