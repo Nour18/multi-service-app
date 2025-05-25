@@ -21,9 +21,9 @@ build:
     - echo "Pushing images to registry..."
     - docker push $CI_REGISTRY_IMAGE/service-a:latest 
     - docker push $CI_REGISTRY_IMAGE/service-b:latest 
-  # only:
-  #   - develop
-  #   - merge_requests
+  only:
+    - develop
+    - merge_requests
 # Run Python unit tests
 test:
   stage: test
@@ -35,9 +35,9 @@ test:
     - python -m unittest discover serviceA/
     - echo "Running unit tests for Service B..."
     - python -m unittest discover serviceB/
-  # only:
-  #   - develop
-  #   - merge_requests
+  only:
+    - develop
+    - merge_requests
 
 # Run basic security scans (Bandit)
 # Bandit scan for Service A
@@ -74,9 +74,9 @@ security_scan_service_b:
       sast: bandit-service-b.json
   allow_failure: true
  # Allow pipeline to continue even if basic security issues are found
-  # only:
-  #   - develop
-  #   - merge_requests
+  only:
+    - develop
+    - merge_requests
 
 # Deploy to EC2 (via SSH)
 deploy:
