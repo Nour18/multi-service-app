@@ -1,0 +1,13 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+
+# Terraform state and cache
+Infra/.terraform/
+Infra/.terraform.lock.hcl
+Infra/terraform.tfstate
+Infra/terraform.tfstate.backup
+
+# Optionally ignore plan files or variable overrides
+Infra/*.tfplan
+Infra/*.tfvars
