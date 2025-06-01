@@ -11,8 +11,9 @@ This project demonstrates a complete DevOps CI/CD pipeline for a Python-based mu
 - Deployment to AWS EC2
 
 ---
+![Architecture](https://github.com/user-attachments/assets/8ccad723-42f7-4638-98e2-77720b19567f)
 
-
+---
 ## 📁 Project Structure
 ```
 multi-service-app/
